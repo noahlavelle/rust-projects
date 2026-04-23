@@ -1,23 +1,13 @@
+mod consts;
+
 use std::cmp::PartialEq;
 use bevy::prelude::*;
+use bevy::prelude::{Deref, DerefMut, Resource};
 use rand::RngExt;
-
-const TIMESTEP_FREQUENCY: f64 = 9.0;
-const WINDOW_WIDTH: f32 = 784.0;
-const WINDOW_HEIGHT: f32 = 784.0;
-const WINDOW_TITLE: &str = "Snake";
-const GRID_TILES: i32 = 29; // Should be odd
-const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
-const PLAYER_COLOR: Color = Color::srgb(1.0, 0.0, 0.0);
-const FOOD_COLOR: Color = Color::srgb(0.0, 1.0, 0.0);
-const STARTING_LENGTH: i32 = 3;
-const SCOREBOARD_FONT_SIZE: f32 = 33.0;
-const SCOREBOARD_TEXT_PADDING: Val = Val::Px(10.0);
-const SCOREBOARD_TEXT_COLOR: Color = Color::srgb(0.0, 0.0, 0.0);
+use consts::*;
 
 #[derive(Resource)]
 struct GridSize(f32);
-
 #[derive(Resource, Deref, DerefMut)]
 struct Score(usize);
 
@@ -26,23 +16,29 @@ struct ScoreboardUI;
 
 fn main() {
     App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: WINDOW_TITLE.to_string(),
+                resizable: false,
+                resolution: (WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32).into(),
+                ..default()
+            }),
+            ..default()
+        }))
         .insert_resource(GridSize(WINDOW_WIDTH / GRID_TILES as f32))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Time::<Fixed>::from_hz(TIMESTEP_FREQUENCY))
         .insert_resource(Score(0))
-        .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_systems(
             FixedUpdate,
-            (
-                create_food.before(handle_input),
-                handle_input,
-                handle_movement.after(handle_input),
-                handle_collision.after(handle_movement),
-                position_to_translation.after(handle_movement),
-                update_scoreboard.after(handle_collision),
-            )
+            ((handle_movement, handle_collision).chain())
         )
+        .add_systems(
+            FixedPostUpdate,
+            (position_to_translation, update_scoreboard)
+        )
+        .add_systems(Update, (handle_input, create_food))
         .run();
 }
 
@@ -55,24 +51,6 @@ enum Direction {
 }
 
 impl Direction {
-    fn from_keys<'a, I>(keys: I) -> Option<Direction>
-    where
-        I: IntoIterator<Item = &'a KeyCode>,
-    {
-        for key in keys {
-            if *key == KeyCode::KeyW {
-                return Some(Direction::Up);
-            } else if *key == KeyCode::KeyS {
-                return Some(Direction::Down);
-            } else if *key == KeyCode::KeyA {
-                return Some(Direction::Left);
-            } else if *key == KeyCode::KeyD {
-                return Some(Direction::Right);
-            }
-        }
-        None
-    }
-
     fn opposite(&self) -> Direction {
         match self {
             Direction::Up => Direction::Down,
@@ -97,11 +75,7 @@ struct Food;
 #[derive(Component)]
 struct ResetOnDeath;
 
-fn setup(mut window: Single<&mut Window>, mut commands: Commands) {
-    window.resizable = false;
-    window.resolution.set(WINDOW_WIDTH, WINDOW_HEIGHT);
-    window.title = WINDOW_TITLE.to_string();
-
+fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
     commands.spawn((
         Text::new("Score: "),
@@ -131,15 +105,14 @@ fn setup(mut window: Single<&mut Window>, mut commands: Commands) {
 }
 
 fn create_starter_segments(commands: &mut Commands) {
-    let base_segment = create_segment(None, commands);
+    let base_segment = create_segment(Position { x: 0, y: 0 }, commands);
     commands.entity(base_segment).insert(Velocity(Direction::Right));
     for i in 0..STARTING_LENGTH {
-        create_segment(Some(i + 1), commands);
+        create_segment(Position { x: -(i + 1), y: 0 }, commands);
     }
 }
 
-fn create_segment(offset: Option<i32>, commands: &mut Commands) -> Entity {
-    let position = Position { x: -offset.unwrap_or(0), y: 0 };
+fn create_segment(position: Position, commands: &mut Commands) -> Entity {
     commands.spawn((
         Sprite::from_color(PLAYER_COLOR, Vec2::ONE),
         Transform {
@@ -153,23 +126,31 @@ fn create_segment(offset: Option<i32>, commands: &mut Commands) -> Entity {
 
 fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Velocity, With<Segment>>
+    mut head: Single<&mut Velocity, With<Segment>>
 ) {
-    let mut head = query.single_mut().expect("Missing lead segment");
-    if let Some(new_direction) = Direction::from_keys(keyboard_input.get_pressed()) {
-        if new_direction != head.0.opposite() {
-            head.0 = new_direction;
+    let direction: Option<Direction> = if keyboard_input.just_pressed(KeyCode::ArrowUp) {
+        Some(Direction::Up)
+    } else if keyboard_input.just_pressed(KeyCode::ArrowDown) {
+        Some(Direction::Down)
+    } else if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
+        Some(Direction::Left)
+    } else if keyboard_input.just_pressed(KeyCode::ArrowRight) {
+        Some(Direction::Right)
+    } else {
+        None
+    };
+
+    if let Some(direction) = direction {
+        if direction != head.0.opposite() {
+            head.0 = direction;
         }
     }
 }
 
 fn handle_movement(
-    mut head_query: Query<(&mut Position, &Velocity), With<Segment>>,
+    mut head: Single<(&mut Position, &Velocity), With<Segment>>,
     mut body_query: Query<&mut Position, (With<Segment>, Without<Velocity>)>
 ) {
-    // Get head position
-    let mut head = head_query.single_mut().expect("Missing lead segment");
-
     // Shift tail segments
     let mut last_position = head.0.clone();
     for mut segment in body_query.iter_mut() {
@@ -199,16 +180,14 @@ fn handle_movement(
 fn handle_collision(
     mut commands: Commands,
     mut score: ResMut<Score>,
-    head_query: Query<(&Position, &Velocity), With<Segment>>,
+    head: Single<(&Position, &Velocity), With<Segment>>,
+    food: Single<(Entity, &Position), With<Food>>,
     body_query: Query<&Position, (With<Segment>, Without<Velocity>)>,
-    food_query: Query<(Entity, &Position), With<Food>>,
     reset_query: Query<Entity, With<ResetOnDeath>>
 ) {
-    let head = head_query.single().expect("Missing lead segment");
-    let food = food_query.single().expect("Missing lead segment");
     if head.0 == food.1 {
         commands.entity(food.0).despawn();
-        create_segment(None, &mut commands);
+        create_segment(head.0.clone(), &mut commands);
         **score += 1;
     }
 
