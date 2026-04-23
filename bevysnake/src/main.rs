@@ -1,46 +1,10 @@
 mod consts;
 
-use std::cmp::PartialEq;
+use std::collections::VecDeque;
 use bevy::prelude::*;
-use bevy::prelude::{Deref, DerefMut, Resource};
+use bevy::window::EnabledButtons;
 use rand::RngExt;
 use consts::*;
-
-#[derive(Resource)]
-struct GridSize(f32);
-#[derive(Resource, Deref, DerefMut)]
-struct Score(usize);
-
-#[derive(Component)]
-struct ScoreboardUI;
-
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: WINDOW_TITLE.to_string(),
-                resizable: false,
-                resolution: (WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32).into(),
-                ..default()
-            }),
-            ..default()
-        }))
-        .insert_resource(GridSize(WINDOW_WIDTH / GRID_TILES as f32))
-        .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .insert_resource(Time::<Fixed>::from_hz(TIMESTEP_FREQUENCY))
-        .insert_resource(Score(0))
-        .add_systems(Startup, setup)
-        .add_systems(
-            FixedUpdate,
-            ((handle_movement, handle_collision).chain())
-        )
-        .add_systems(
-            FixedPostUpdate,
-            (position_to_translation, update_scoreboard)
-        )
-        .add_systems(Update, (handle_input, create_food))
-        .run();
-}
 
 #[derive(PartialEq)]
 enum Direction {
@@ -61,10 +25,21 @@ impl Direction {
     }
 }
 
+#[derive(Resource)]
+struct GridSize(f32);
+#[derive(Resource, Deref, DerefMut)]
+struct Score(usize);
+
+#[derive(Component)]
+struct ScoreboardUI;
+
 #[derive(Component, Default)]
 struct Segment;
 #[derive(Component)]
-struct Velocity(Direction);
+struct Head {
+    direction: Direction,
+    direction_queue: VecDeque<Direction>,
+}
 #[derive(Component, PartialEq, Clone)]
 struct Position {
     x: i32,
@@ -106,7 +81,7 @@ fn setup(mut commands: Commands) {
 
 fn create_starter_segments(commands: &mut Commands) {
     let base_segment = create_segment(Position { x: 0, y: 0 }, commands);
-    commands.entity(base_segment).insert(Velocity(Direction::Right));
+    commands.entity(base_segment).insert(Head { direction: Direction::Right, direction_queue: VecDeque::new() });
     for i in 0..STARTING_LENGTH {
         create_segment(Position { x: -(i + 1), y: 0 }, commands);
     }
@@ -126,7 +101,7 @@ fn create_segment(position: Position, commands: &mut Commands) -> Entity {
 
 fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut head: Single<&mut Velocity, With<Segment>>
+    mut head: Single<&mut Head, With<Segment>>
 ) {
     let direction: Option<Direction> = if keyboard_input.just_pressed(KeyCode::ArrowUp) {
         Some(Direction::Up)
@@ -141,15 +116,16 @@ fn handle_input(
     };
 
     if let Some(direction) = direction {
-        if direction != head.0.opposite() {
-            head.0 = direction;
+        let last_direction = head.direction_queue.back().unwrap_or(&head.direction);
+        if direction != last_direction.opposite() {
+            head.direction_queue.push_back(direction);
         }
     }
 }
 
 fn handle_movement(
-    mut head: Single<(&mut Position, &Velocity), With<Segment>>,
-    mut body_query: Query<&mut Position, (With<Segment>, Without<Velocity>)>
+    mut head: Single<(&mut Position, &mut Head), With<Segment>>,
+    mut body_query: Query<&mut Position, (With<Segment>, Without<Head>)>
 ) {
     // Shift tail segments
     let mut last_position = head.0.clone();
@@ -161,7 +137,10 @@ fn handle_movement(
     }
 
     // Move head in current direction
-    match &head.1.0 {
+    if !head.1.direction_queue.is_empty() {
+        head.1.direction = head.1.direction_queue.pop_front().unwrap();
+    }
+    match head.1.direction {
         Direction::Up => {
             head.0.y += 1;
         }
@@ -180,9 +159,9 @@ fn handle_movement(
 fn handle_collision(
     mut commands: Commands,
     mut score: ResMut<Score>,
-    head: Single<(&Position, &Velocity), With<Segment>>,
+    head: Single<(&Position, &Head), With<Segment>>,
     food: Single<(Entity, &Position), With<Food>>,
-    body_query: Query<&Position, (With<Segment>, Without<Velocity>)>,
+    body_query: Query<&Position, (With<Segment>, Without<Head>)>,
     reset_query: Query<Entity, With<ResetOnDeath>>
 ) {
     if head.0 == food.1 {
@@ -252,3 +231,36 @@ fn position_to_translation(grid_size: Res<GridSize>, mut query: Query<(&Position
         transform.scale = Vec3::splat(grid_size.0);
     }
 }
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: WINDOW_TITLE.to_string(),
+                resizable: false,
+                resolution: (WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32).into(),
+                enabled_buttons: EnabledButtons {
+                    maximize: false,
+                    ..default()
+                },
+                ..default()
+            }),
+            ..default()
+        }))
+        .insert_resource(GridSize(WINDOW_WIDTH / GRID_TILES as f32))
+        .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .insert_resource(Time::<Fixed>::from_hz(TIMESTEP_FREQUENCY))
+        .insert_resource(Score(0))
+        .add_systems(Startup, setup)
+        .add_systems(
+            FixedUpdate,
+            (handle_movement, handle_collision).chain()
+        )
+        .add_systems(
+            FixedPostUpdate,
+            (position_to_translation, update_scoreboard)
+        )
+        .add_systems(Update, (handle_input, create_food))
+        .run();
+}
+
