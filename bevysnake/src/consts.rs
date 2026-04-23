@@ -17,6 +17,8 @@ pub const BORDER_THICKNESS: f32 = 24.0;
 pub const SCOREBOARD_FONT_SIZE: f32 = 55.0;
 pub const SCOREBOARD_TEXT_PADDING: Val = Val::Px(20.0);
 pub const SCOREBOARD_TEXT_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
+pub const CONTROLS_FONT_SIZE: f32 = 26.0;
+pub const CONTROLS_TEXT_PADDING: Val = Val::Px(85.0);
 
 pub const STARTING_LENGTH: i32 = 2; // Excluding head
 pub const TIMESTEP_FREQUENCY: f64 = 9.0;

@@ -59,11 +59,10 @@ struct Position {
 }
 #[derive(Component)]
 struct Food;
-#[derive(Component)]
-struct ResetOnDeath;
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<GridSize>) {
     commands.spawn(Camera2d);
+
     commands.spawn((
         Text::new("Score: "),
         TextFont {
@@ -88,6 +87,21 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<
             },
             TextColor(SCOREBOARD_TEXT_COLOR),
         )],
+    ));
+    commands.spawn((
+        Text::new("Move: Arrows\nPause/Resume: Esc\nRetry: Enter"),
+        TextFont {
+            font: asset_server.load("text_seven_segment.ttf"),
+            font_size: CONTROLS_FONT_SIZE,
+            ..default()
+        },
+        TextColor(SCOREBOARD_TEXT_COLOR),
+        Node {
+            position_type: PositionType::Absolute,
+            top: CONTROLS_TEXT_PADDING,
+            left: SCOREBOARD_TEXT_PADDING,
+            ..default()
+        },
     ));
 
     commands.spawn((
@@ -151,7 +165,6 @@ fn create_segment(position: Position, sprite: &Sprite, commands: &mut Commands) 
             ..default()
         },
         Segment,
-        ResetOnDeath,
         position,
         sprite.clone(),
     )).id()
@@ -283,7 +296,6 @@ fn handle_spawn_food(
             sprite,
             Transform::default(),
             Food,
-            ResetOnDeath,
             position,
         ));
     }
@@ -376,20 +388,14 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            spawn_snake.run_if(in_state(GameState::Starting))
-        )
-        .add_systems(
-            Update,
             (
+                spawn_snake.run_if(in_state(GameState::Starting)),
                 handle_movement_input.run_if(in_state(GameState::Running)),
                 listen_for_pause.run_if(in_state(GameState::Running)),
                 listen_for_resume.run_if(in_state(GameState::Paused)),
                 listen_for_restart.run_if(in_state(GameState::GameOver)),
+                reset.run_if(in_state(GameState::GameOver)),
             )
-        )
-        .add_systems(
-            Update,
-            reset.run_if(in_state(GameState::GameOver))
         )
         .add_systems(
             FixedUpdate,
