@@ -6,11 +6,11 @@ pub const WINDOW_WIDTH: f32 = 1280.0;
 pub const WINDOW_HEIGHT: f32 = 820.0;
 pub const WINDOW_TITLE: &str = "Snake";
 
-pub const BACKGROUND_COLOR: Color = Color::srgb(0.255, 0.255, 0.255);
+pub const BACKGROUND_COLOR: Color = Color::srgb(24.0/255.0, 23.0/255.0, 22.0/255.0);
 pub const GAME_SURFACE_COLOR: Color = Color::srgb(0.764, 0.812, 0.635);
-pub const PLAYER_COLOR: Color = Color::srgb(0.235, 0.239, 0.180);
-pub const FOOD_COLOR: Color = Color::srgb(0.141, 0.149, 0.247);
-pub const EMPTY_TILE_COLOR: Color = Color::srgb(0.663, 0.710, 0.553);
+pub const PLAYER_COLOR: Color = Color::srgb(52.0/255.0, 67.0/255.0, 65.0/255.0);
+pub const FOOD_COLOR: Color = Color::srgb(175.0/255.0, 0.0/255.0, 33.0/255.0);
+pub const EMPTY_TILE_COLOR: Color = Color::srgb(0.613, 0.660, 0.503);
 pub const TILE_TEXTURE_SIZE: f32 = 16.0;
 pub const BORDER_THICKNESS: f32 = 24.0;
 

@@ -2,16 +2,16 @@ mod consts;
 
 use std::collections::VecDeque;
 use bevy::prelude::*;
-use bevy::window::EnabledButtons;
 use rand::RngExt;
 use consts::*;
 
 #[derive(PartialEq, Default)]
 enum Direction {
+    #[default]
+    None,
     Up,
     Down,
     Left,
-    #[default]
     Right,
 }
 
@@ -20,12 +20,14 @@ enum GameState {
     #[default]
     Starting,
     Running,
+    Paused,
     GameOver,
 }
 
 impl Direction {
     fn opposite(&self) -> Direction {
         match self {
+            Direction::None => Direction::Left, // Snake should spawn away from this opposite
             Direction::Up => Direction::Down,
             Direction::Down => Direction::Up,
             Direction::Left => Direction::Right,
@@ -45,7 +47,7 @@ struct TileFullSprite(Sprite);
 struct ScoreboardUI;
 #[derive(Component)]
 struct Segment;
-#[derive(Component)]
+#[derive(Component, Default)]
 struct Head {
     direction: Direction,
     direction_queue: VecDeque<Direction>,
@@ -135,7 +137,7 @@ fn spawn_snake(mut commands: Commands, tile_full_sprite: Res<TileFullSprite>) {
     sprite.color = PLAYER_COLOR;
 
     let base_segment = create_segment(Position { x: 0, y: 0 }, &sprite, &mut commands);
-    commands.entity(base_segment).insert(Head { direction: Direction::Right, direction_queue: VecDeque::new() });
+    commands.entity(base_segment).insert(Head::default());
     for i in 0..STARTING_LENGTH {
         create_segment(Position { x: -(i + 1), y: 0 }, &sprite, &mut commands);
     }
@@ -183,6 +185,10 @@ fn handle_movement(
     mut head: Single<(&mut Position, &mut Head), With<Segment>>,
     mut body_query: Query<&mut Position, (With<Segment>, Without<Head>)>
 ) {
+    if head.1.direction == Direction::None && head.1.direction_queue.is_empty() {
+        return;
+    }
+
     let mut last_position = head.0.clone();
     for mut segment in body_query.iter_mut() {
         let original = segment.clone();
@@ -195,6 +201,7 @@ fn handle_movement(
         head.1.direction = head.1.direction_queue.pop_front().unwrap();
     }
     match head.1.direction {
+        Direction::None => {},
         Direction::Up => {
             head.0.y += 1;
         }
@@ -213,7 +220,8 @@ fn handle_movement(
 fn handle_death(
     mut commands: Commands,
     head: Single<&Position, With<Head>>,
-    segments: Query<&Position, (With<Segment>, Without<Head>)>
+    segments: Query<&Position, (With<Segment>, Without<Head>)>,
+    asset_server: Res<AssetServer>
 ) {
     if segments.iter().collect::<Vec<_>>().contains(&*head)
         || head.x < -GRID_TILES / 2
@@ -221,6 +229,10 @@ fn handle_death(
         || head.x > GRID_TILES / 2
         || head.y > GRID_TILES / 2
     {
+        commands.spawn((
+            AudioPlayer::new(asset_server.load("die.mp3")),
+            PlaybackSettings::DESPAWN,
+        ));
         commands.set_state(GameState::GameOver);
     }
 }
@@ -231,6 +243,7 @@ fn handle_eat(
     head: Single<&Position, With<Head>>,
     food: Single<(Entity, &Position), With<Food>>,
     tile_full_sprite: Res<TileFullSprite>,
+    asset_server: Res<AssetServer>
 ) {
     let mut sprite = tile_full_sprite.0.clone();
     sprite.color = PLAYER_COLOR;
@@ -239,6 +252,11 @@ fn handle_eat(
         commands.entity(food.0).despawn();
         create_segment(head.clone(), &sprite, &mut commands);
         **score += 1;
+
+        commands.spawn((
+            AudioPlayer::new(asset_server.load("eat.mp3")),
+            PlaybackSettings::DESPAWN,
+        ));
     }
 }
 
@@ -271,8 +289,8 @@ fn handle_spawn_food(
     }
 }
 
-fn position_to_translation(grid_size: Res<GridSize>, mut query: Query<(&Position, &mut Transform, &mut Sprite)>) {
-    for (position, mut transform, mut sprite) in query.iter_mut() {
+fn position_to_translation(grid_size: Res<GridSize>, mut query: Query<(&Position, &mut Transform)>) {
+    for (position, mut transform) in query.iter_mut() {
         transform.translation = Vec3::new(
             position.x.clamp(-(GRID_TILES / 2), GRID_TILES / 2) as f32 * grid_size.0,
             position.y.clamp(-(GRID_TILES / 2), GRID_TILES / 2) as f32 * grid_size.0,
@@ -289,21 +307,51 @@ fn update_scoreboard(
     *writer.text(*score_root, 1) = score.to_string();
 }
 
-fn reset(
-    mut commands: Commands,
-    mut score: ResMut<Score>,
-    food: Query<Entity, With<Food>>,
-    segments: Query<Entity, With<Segment>>,
-) {
+fn reset(mut commands: Commands,  food: Query<Entity, With<Food>>,  segments: Query<Entity, With<Segment>>) {
     for food in food.iter() {
         commands.entity(food).despawn();
     }
     for segment in segments.iter() {
         commands.entity(segment).despawn();
     }
-    **score = 0;
+}
 
-    commands.set_state(GameState::Starting);
+#[inline]
+fn listen_for_pause(keyboard_input: Res<ButtonInput<KeyCode>>, asset_server: Res<AssetServer>, mut commands: Commands) {
+    if keyboard_input.just_pressed(KeyCode::Escape) {
+        play_audio_attention(&asset_server, &mut commands);
+        commands.set_state(GameState::Paused);
+    }
+}
+
+#[inline]
+fn listen_for_resume(keyboard_input: Res<ButtonInput<KeyCode>>, asset_server: Res<AssetServer>, mut commands: Commands) {
+    if keyboard_input.just_pressed(KeyCode::Escape) {
+        play_audio_attention(&asset_server, &mut commands);
+        commands.set_state(GameState::Running);
+    }
+}
+
+#[inline]
+fn listen_for_restart(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    asset_server: Res<AssetServer>,
+    mut score: ResMut<Score>,
+    mut commands: Commands
+) {
+    if keyboard_input.just_pressed(KeyCode::Enter) {
+        **score = 0;
+        play_audio_attention(&asset_server, &mut commands);
+        commands.set_state(GameState::Starting);
+    }
+}
+
+#[inline]
+fn play_audio_attention(asset_server: &Res<AssetServer>, commands: &mut Commands) {
+    commands.spawn((
+        AudioPlayer::new(asset_server.load("blip.mp3")),
+        PlaybackSettings::DESPAWN,
+    ));
 }
 
 fn main() {
@@ -314,9 +362,6 @@ fn main() {
                     title: WINDOW_TITLE.to_string(),
                     resizable: false,
                     resolution: (WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32).into(),
-                    enabled_buttons: EnabledButtons {
-                        ..default()
-                    },
                     ..default()
                 }),
             ..default()
@@ -335,8 +380,12 @@ fn main() {
         )
         .add_systems(
             Update,
-            handle_movement_input
-                .run_if(in_state(GameState::Running))
+            (
+                handle_movement_input.run_if(in_state(GameState::Running)),
+                listen_for_pause.run_if(in_state(GameState::Running)),
+                listen_for_resume.run_if(in_state(GameState::Paused)),
+                listen_for_restart.run_if(in_state(GameState::GameOver)),
+            )
         )
         .add_systems(
             Update,
@@ -354,4 +403,3 @@ fn main() {
         )
         .run();
 }
-
