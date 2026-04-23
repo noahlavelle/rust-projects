@@ -38,18 +38,19 @@ impl Direction {
 struct GridSize(f32);
 #[derive(Resource, Deref, DerefMut)]
 struct Score(usize);
+#[derive(Resource)]
+struct TileFullSprite(Sprite);
 
 #[derive(Component)]
 struct ScoreboardUI;
-
-#[derive(Component, Default)]
+#[derive(Component)]
 struct Segment;
 #[derive(Component)]
 struct Head {
     direction: Direction,
     direction_queue: VecDeque<Direction>,
 }
-#[derive(Component, PartialEq, Clone)]
+#[derive(Component, PartialEq, Clone, Debug)]
 struct Position {
     x: i32,
     y: i32,
@@ -59,11 +60,12 @@ struct Food;
 #[derive(Component)]
 struct ResetOnDeath;
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<GridSize>) {
     commands.spawn(Camera2d);
     commands.spawn((
         Text::new("Score: "),
         TextFont {
+            font: asset_server.load("text_seven_segment.ttf"),
             font_size: SCOREBOARD_FONT_SIZE,
             ..default()
         },
@@ -78,33 +80,78 @@ fn setup(mut commands: Commands) {
         children![(
             TextSpan::default(),
             TextFont {
+                font: asset_server.load("text_seven_segment.ttf"),
                 font_size: SCOREBOARD_FONT_SIZE,
                 ..default()
             },
             TextColor(SCOREBOARD_TEXT_COLOR),
         )],
     ));
+
+    commands.spawn((
+        Sprite::from_color(GAME_SURFACE_COLOR, Vec2::ONE),
+        Transform {
+            translation: Vec3::new(0.0, 0.0, -10.0),
+            scale: Vec3::new(GAME_SURFACE_SQUARE_SIZE, GAME_SURFACE_SQUARE_SIZE, 1.0),
+            ..default()
+        }
+    ));
+    let border_size = GAME_SURFACE_SQUARE_SIZE + BORDER_THICKNESS;
+    commands.spawn((
+        Sprite::from_color(EMPTY_TILE_COLOR, Vec2::ONE),
+        Transform {
+            translation: Vec3::new(0.0, 0.0, -20.0),
+            scale: Vec3::new(border_size, border_size, 1.0),
+            ..default()
+        }
+    ));
+    commands.spawn((
+        Sprite {
+            image: asset_server.load("tile_empty.png"),
+            custom_size: Some(Vec2::splat(GAME_SURFACE_SQUARE_SIZE)),
+            color: EMPTY_TILE_COLOR,
+            image_mode: SpriteImageMode::Tiled {
+                tile_x: true,
+                tile_y: true,
+                stretch_value: grid_size.0 / TILE_TEXTURE_SIZE,
+            },
+            ..default()
+        },
+        Transform {
+            translation: Vec3::new(0.0, 0.0, 100.0),
+            ..default()
+        },
+    ));
+
+    commands.insert_resource(TileFullSprite(Sprite {
+        image: asset_server.load("tile_full.png"),
+        custom_size: Some(Vec2::new(grid_size.0, grid_size.0)),
+        ..default()
+    }));
 }
 
-fn spawn_snake(mut commands: Commands) {
-    let base_segment = create_segment(Position { x: 0, y: 0 }, &mut commands);
+fn spawn_snake(mut commands: Commands, tile_full_sprite: Res<TileFullSprite>) {
+    let mut sprite = tile_full_sprite.0.clone();
+    sprite.color = PLAYER_COLOR;
+
+    let base_segment = create_segment(Position { x: 0, y: 0 }, &sprite, &mut commands);
     commands.entity(base_segment).insert(Head { direction: Direction::Right, direction_queue: VecDeque::new() });
     for i in 0..STARTING_LENGTH {
-        create_segment(Position { x: -(i + 1), y: 0 }, &mut commands);
+        create_segment(Position { x: -(i + 1), y: 0 }, &sprite, &mut commands);
     }
 
     commands.set_state(GameState::Running);
 }
 
-fn create_segment(position: Position, commands: &mut Commands) -> Entity {
+fn create_segment(position: Position, sprite: &Sprite, commands: &mut Commands) -> Entity {
     commands.spawn((
-        Sprite::from_color(PLAYER_COLOR, Vec2::ONE),
         Transform {
             ..default()
         },
         Segment,
         ResetOnDeath,
         position,
+        sprite.clone(),
     )).id()
 }
 
@@ -136,7 +183,6 @@ fn handle_movement(
     mut head: Single<(&mut Position, &mut Head), With<Segment>>,
     mut body_query: Query<&mut Position, (With<Segment>, Without<Head>)>
 ) {
-    // Shift tail segments
     let mut last_position = head.0.clone();
     for mut segment in body_query.iter_mut() {
         let original = segment.clone();
@@ -145,7 +191,6 @@ fn handle_movement(
         last_position = original;
     }
 
-    // Move head in current direction
     if !head.1.direction_queue.is_empty() {
         head.1.direction = head.1.direction_queue.pop_front().unwrap();
     }
@@ -185,10 +230,14 @@ fn handle_eat(
     mut score: ResMut<Score>,
     head: Single<&Position, With<Head>>,
     food: Single<(Entity, &Position), With<Food>>,
+    tile_full_sprite: Res<TileFullSprite>,
 ) {
+    let mut sprite = tile_full_sprite.0.clone();
+    sprite.color = PLAYER_COLOR;
+
     if *head == food.1 {
         commands.entity(food.0).despawn();
-        create_segment(head.clone(), &mut commands);
+        create_segment(head.clone(), &sprite, &mut commands);
         **score += 1;
     }
 }
@@ -196,7 +245,8 @@ fn handle_eat(
 fn handle_spawn_food(
     mut commands: Commands,
     body_query: Query<&Position, With<Segment>>,
-    food_query: Query<&Position, With<Food>>
+    food_query: Query<&Position, With<Food>>,
+    tile_full_sprite: Res<TileFullSprite>,
 ) {
     if food_query.is_empty() {
         let segments = body_query.iter().collect::<Vec<_>>();
@@ -209,8 +259,10 @@ fn handle_spawn_food(
                 break random;
             }
         };
+        let mut sprite = tile_full_sprite.0.clone();
+        sprite.color = FOOD_COLOR;
         commands.spawn((
-            Sprite::from_color(FOOD_COLOR, Vec2::ONE),
+            sprite,
             Transform::default(),
             Food,
             ResetOnDeath,
@@ -219,14 +271,13 @@ fn handle_spawn_food(
     }
 }
 
-fn position_to_translation(grid_size: Res<GridSize>, mut query: Query<(&Position, &mut Transform)>) {
-    for (position, mut transform) in query.iter_mut() {
+fn position_to_translation(grid_size: Res<GridSize>, mut query: Query<(&Position, &mut Transform, &mut Sprite)>) {
+    for (position, mut transform, mut sprite) in query.iter_mut() {
         transform.translation = Vec3::new(
-            position.x as f32 * grid_size.0,
-            position.y as f32 * grid_size.0,
-            0.0
+            position.x.clamp(-(GRID_TILES / 2), GRID_TILES / 2) as f32 * grid_size.0,
+            position.y.clamp(-(GRID_TILES / 2), GRID_TILES / 2) as f32 * grid_size.0,
+            1.0
         );
-        transform.scale = Vec3::splat(grid_size.0);
     }
 }
 
@@ -257,20 +308,22 @@ fn reset(
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: WINDOW_TITLE.to_string(),
-                resizable: false,
-                resolution: (WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32).into(),
-                enabled_buttons: EnabledButtons {
-                    maximize: false,
+        .add_plugins(DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: WINDOW_TITLE.to_string(),
+                    resizable: false,
+                    resolution: (WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32).into(),
+                    enabled_buttons: EnabledButtons {
+                        ..default()
+                    },
                     ..default()
-                },
-                ..default()
-            }),
+                }),
             ..default()
-        }))
-        .insert_resource(GridSize(WINDOW_WIDTH / GRID_TILES as f32))
+            })
+            .set(ImagePlugin::default_nearest())
+        )
+        .insert_resource(GridSize(GAME_SURFACE_SQUARE_SIZE / GRID_TILES as f32))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Time::<Fixed>::from_hz(TIMESTEP_FREQUENCY))
         .insert_resource(Score(0))
@@ -282,7 +335,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (handle_movement_input, handle_spawn_food)
+            handle_movement_input
                 .run_if(in_state(GameState::Running))
         )
         .add_systems(
@@ -291,12 +344,13 @@ fn main() {
         )
         .add_systems(
             FixedUpdate,
-            (handle_movement, (handle_death, handle_eat).after(handle_movement))
+            (handle_movement, (handle_death, handle_eat).after(handle_movement), handle_spawn_food.after(handle_eat))
                 .run_if(in_state(GameState::Running))
         )
         .add_systems(
             FixedPostUpdate,
             (position_to_translation, update_scoreboard)
+                .run_if(in_state(GameState::Running))
         )
         .run();
 }
