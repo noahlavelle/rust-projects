@@ -6,12 +6,21 @@ use bevy::window::EnabledButtons;
 use rand::RngExt;
 use consts::*;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Default)]
 enum Direction {
     Up,
     Down,
     Left,
+    #[default]
     Right,
+}
+
+#[derive(States,Default, Debug, Clone, PartialEq, Eq, Hash)]
+enum GameState {
+    #[default]
+    Starting,
+    Running,
+    GameOver,
 }
 
 impl Direction {
@@ -75,16 +84,16 @@ fn setup(mut commands: Commands) {
             TextColor(SCOREBOARD_TEXT_COLOR),
         )],
     ));
-
-    create_starter_segments(&mut commands);
 }
 
-fn create_starter_segments(commands: &mut Commands) {
-    let base_segment = create_segment(Position { x: 0, y: 0 }, commands);
+fn spawn_snake(mut commands: Commands) {
+    let base_segment = create_segment(Position { x: 0, y: 0 }, &mut commands);
     commands.entity(base_segment).insert(Head { direction: Direction::Right, direction_queue: VecDeque::new() });
     for i in 0..STARTING_LENGTH {
-        create_segment(Position { x: -(i + 1), y: 0 }, commands);
+        create_segment(Position { x: -(i + 1), y: 0 }, &mut commands);
     }
+
+    commands.set_state(GameState::Running);
 }
 
 fn create_segment(position: Position, commands: &mut Commands) -> Entity {
@@ -99,7 +108,7 @@ fn create_segment(position: Position, commands: &mut Commands) -> Entity {
     )).id()
 }
 
-fn handle_input(
+fn handle_movement_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut head: Single<&mut Head, With<Segment>>
 ) {
@@ -156,69 +165,58 @@ fn handle_movement(
     }
 }
 
-fn handle_collision(
+fn handle_death(
+    mut commands: Commands,
+    head: Single<&Position, With<Head>>,
+    segments: Query<&Position, (With<Segment>, Without<Head>)>
+) {
+    if segments.iter().collect::<Vec<_>>().contains(&*head)
+        || head.x < -GRID_TILES / 2
+        || head.y < -GRID_TILES / 2
+        || head.x > GRID_TILES / 2
+        || head.y > GRID_TILES / 2
+    {
+        commands.set_state(GameState::GameOver);
+    }
+}
+
+fn handle_eat(
     mut commands: Commands,
     mut score: ResMut<Score>,
-    head: Single<(&Position, &Head), With<Segment>>,
+    head: Single<&Position, With<Head>>,
     food: Single<(Entity, &Position), With<Food>>,
-    body_query: Query<&Position, (With<Segment>, Without<Head>)>,
-    reset_query: Query<Entity, With<ResetOnDeath>>
 ) {
-    if head.0 == food.1 {
+    if *head == food.1 {
         commands.entity(food.0).despawn();
-        create_segment(head.0.clone(), &mut commands);
+        create_segment(head.clone(), &mut commands);
         **score += 1;
     }
-
-    let segments = body_query.iter().collect::<Vec<_>>();
-    if segments.contains(&head.0)
-        || head.0.x < -GRID_TILES / 2
-        || head.0.y < -GRID_TILES / 2
-        || head.0.x > GRID_TILES / 2
-        || head.0.y > GRID_TILES / 2
-    {
-        for entity in reset_query.iter() {
-            commands.entity(entity).despawn();
-        }
-        **score = 0;
-        create_starter_segments(&mut commands);
-    }
 }
 
-fn update_scoreboard(
-    score: Res<Score>,
-    score_root: Single<Entity, (With<ScoreboardUI>, With<Text>)>,
-    mut writer: TextUiWriter,
-) {
-    *writer.text(*score_root, 1) = score.to_string();
-}
-
-fn create_food(
+fn handle_spawn_food(
     mut commands: Commands,
     body_query: Query<&Position, With<Segment>>,
     food_query: Query<&Position, With<Food>>
 ) {
-    if !food_query.is_empty() {
-        return;
-    }
-
-    let segments = body_query.iter().collect::<Vec<_>>();
-    let position = loop {
-        let random = Position {
-            x: rand::rng().random_range(0..GRID_TILES) - (GRID_TILES / 2),
-            y: rand::rng().random_range(0..GRID_TILES) - (GRID_TILES / 2),
+    if food_query.is_empty() {
+        let segments = body_query.iter().collect::<Vec<_>>();
+        let position = loop {
+            let random = Position {
+                x: rand::rng().random_range(0..GRID_TILES) - (GRID_TILES / 2),
+                y: rand::rng().random_range(0..GRID_TILES) - (GRID_TILES / 2),
+            };
+            if !segments.contains(&&random) {
+                break random;
+            }
         };
-        if !segments.contains(&&random) {
-            break random;
-        }
-    };
-    commands.spawn((
-        Sprite::from_color(FOOD_COLOR, Vec2::ONE),
-        Transform::default(),
-        Food,
-        ResetOnDeath,
-        position,
-    ));
+        commands.spawn((
+            Sprite::from_color(FOOD_COLOR, Vec2::ONE),
+            Transform::default(),
+            Food,
+            ResetOnDeath,
+            position,
+        ));
+    }
 }
 
 fn position_to_translation(grid_size: Res<GridSize>, mut query: Query<(&Position, &mut Transform)>) {
@@ -230,6 +228,31 @@ fn position_to_translation(grid_size: Res<GridSize>, mut query: Query<(&Position
         );
         transform.scale = Vec3::splat(grid_size.0);
     }
+}
+
+fn update_scoreboard(
+    score: Res<Score>,
+    score_root: Single<Entity, (With<ScoreboardUI>, With<Text>)>,
+    mut writer: TextUiWriter,
+) {
+    *writer.text(*score_root, 1) = score.to_string();
+}
+
+fn reset(
+    mut commands: Commands,
+    mut score: ResMut<Score>,
+    food: Query<Entity, With<Food>>,
+    segments: Query<Entity, With<Segment>>,
+) {
+    for food in food.iter() {
+        commands.entity(food).despawn();
+    }
+    for segment in segments.iter() {
+        commands.entity(segment).despawn();
+    }
+    **score = 0;
+
+    commands.set_state(GameState::Starting);
 }
 
 fn main() {
@@ -251,16 +274,30 @@ fn main() {
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Time::<Fixed>::from_hz(TIMESTEP_FREQUENCY))
         .insert_resource(Score(0))
+        .init_state::<GameState>()
         .add_systems(Startup, setup)
         .add_systems(
+            Update,
+            spawn_snake.run_if(in_state(GameState::Starting))
+        )
+        .add_systems(
+            Update,
+            (handle_movement_input, handle_spawn_food)
+                .run_if(in_state(GameState::Running))
+        )
+        .add_systems(
+            Update,
+            reset.run_if(in_state(GameState::GameOver))
+        )
+        .add_systems(
             FixedUpdate,
-            (handle_movement, handle_collision).chain()
+            (handle_movement, (handle_death, handle_eat).after(handle_movement))
+                .run_if(in_state(GameState::Running))
         )
         .add_systems(
             FixedPostUpdate,
             (position_to_translation, update_scoreboard)
         )
-        .add_systems(Update, (handle_input, create_food))
         .run();
 }
 
