@@ -1,11 +1,16 @@
-[build]
-target = "aarch64-pc-windows-msvc"
-
 [target.aarch64-pc-windows-msvc]
 linker = "rust-lld.exe"
 rustdocflags = ["-Clinker=rust-lld.exe"]
 rustflags = [
     # Nightly
-    "-Zshare-generics=off", # This needs to be off if you use dynamic linking on Windows.
+    "-Zshare-generics=y", # This needs to be off if you use dynamic linking on Windows.
+    "-Zthreads=0",
+]
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+rustdocflags = ["-Clinker=rust-lld.exe"]
+rustflags = [
+    # Nightly
+    "-Zshare-generics=y", # This needs to be off if you use dynamic linking on Windows.
     "-Zthreads=0",
 ]

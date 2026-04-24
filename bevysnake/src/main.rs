@@ -1,7 +1,9 @@
+#![windows_subsystem = "windows"]
 mod consts;
 
 use std::collections::VecDeque;
 use bevy::prelude::*;
+use bevy_embedded_assets::EmbeddedAssetPlugin;
 use rand::RngExt;
 use consts::*;
 
@@ -63,10 +65,11 @@ struct Food;
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<GridSize>) {
     commands.spawn(Camera2d);
 
+    let font = asset_server.load("embedded://text_seven_segment.ttf");
     commands.spawn((
         Text::new("Score: "),
         TextFont {
-            font: asset_server.load("text_seven_segment.ttf"),
+            font: font.clone(),
             font_size: SCOREBOARD_FONT_SIZE,
             ..default()
         },
@@ -81,7 +84,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<
         children![(
             TextSpan::default(),
             TextFont {
-                font: asset_server.load("text_seven_segment.ttf"),
+                font: font.clone(),
                 font_size: SCOREBOARD_FONT_SIZE,
                 ..default()
             },
@@ -91,7 +94,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<
     commands.spawn((
         Text::new("Move: Arrows\nPause/Resume: Esc\nRetry: Enter"),
         TextFont {
-            font: asset_server.load("text_seven_segment.ttf"),
+            font: font.clone(),
             font_size: CONTROLS_FONT_SIZE,
             ..default()
         },
@@ -123,7 +126,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<
     ));
     commands.spawn((
         Sprite {
-            image: asset_server.load("tile_empty.png"),
+            image: asset_server.load("embedded://tile_empty.png"),
             custom_size: Some(Vec2::splat(GAME_SURFACE_SQUARE_SIZE)),
             color: EMPTY_TILE_COLOR,
             image_mode: SpriteImageMode::Tiled {
@@ -140,7 +143,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, grid_size: Res<
     ));
 
     commands.insert_resource(TileFullSprite(Sprite {
-        image: asset_server.load("tile_full.png"),
+        image: asset_server.load("embedded://tile_full.png"),
         custom_size: Some(Vec2::new(grid_size.0, grid_size.0)),
         ..default()
     }));
@@ -243,7 +246,7 @@ fn handle_death(
         || head.y > GRID_TILES / 2
     {
         commands.spawn((
-            AudioPlayer::new(asset_server.load("die.mp3")),
+            AudioPlayer::new(asset_server.load("embedded://die.mp3")),
             PlaybackSettings::DESPAWN,
         ));
         commands.set_state(GameState::GameOver);
@@ -267,7 +270,7 @@ fn handle_eat(
         **score += 1;
 
         commands.spawn((
-            AudioPlayer::new(asset_server.load("eat.mp3")),
+            AudioPlayer::new(asset_server.load("embedded://eat.mp3")),
             PlaybackSettings::DESPAWN,
         ));
     }
@@ -361,14 +364,14 @@ fn listen_for_restart(
 #[inline]
 fn play_audio_attention(asset_server: &Res<AssetServer>, commands: &mut Commands) {
     commands.spawn((
-        AudioPlayer::new(asset_server.load("blip.mp3")),
+        AudioPlayer::new(asset_server.load("embedded://blip.mp3")),
         PlaybackSettings::DESPAWN,
     ));
 }
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins
+        .add_plugins((DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: WINDOW_TITLE.to_string(),
@@ -378,8 +381,9 @@ fn main() {
                 }),
             ..default()
             })
-            .set(ImagePlugin::default_nearest())
-        )
+            .set(ImagePlugin::default_nearest()),
+            EmbeddedAssetPlugin::default()
+        ))
         .insert_resource(GridSize(GAME_SURFACE_SQUARE_SIZE / GRID_TILES as f32))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Time::<Fixed>::from_hz(TIMESTEP_FREQUENCY))
