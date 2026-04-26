@@ -12,7 +12,7 @@ pub struct PlayerStats {
 
 impl Default for PlayerStats {
     fn default() -> Self {
-        Self { color: Color::hsl(180.0, 0.5, 0.5), speed: 50.0 }
+        Self { color: Color::hsl(180.0, 0.4, 0.4), speed: 50.0 }
     }
 }
 

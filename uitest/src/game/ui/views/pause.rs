@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::game::ui::components::button::UIButton;
 use crate::game::ui::components::container::{UIContainer};
 use crate::game::ui::components::container::close::UIContainerClose;
 use crate::game::ui::components::container::title::UIContainerTitle;
@@ -22,26 +23,24 @@ fn load_ui(mut commands: Commands) {
         UIContainer::new().full().center(),
         BackgroundColor(Color::BLACK.with_alpha(0.5)),
     )).with_children(|root| {
-        root.spawn((
-            UIContainer::new()
-                .with_width(Val::Px(300.0))
-                .with_height(Val::Px(300.0))
-                .panel()
-                .center(),
-            BackgroundColor(Color::srgb(0.6, 0.3, 0.6)),
-        )).with_children(|root| {
-           root.spawn((
-               UIContainer::new().with_width(Val::Percent(100.0)).with_height(Val::Px(60.0)),
-               BackgroundColor(Color::BLACK),
-           ));
             root.spawn((
-                UIContainer::new().with_width(Val::Percent(100.0)).with_height(Val::Px(60.0)),
-                BackgroundColor(Color::BLACK),
-            ));
-            root.spawn(UIContainerClose);
-            root.spawn(UIContainerTitle::from_text("Paused...".into()));
+                UIContainer::new()
+                    .with_width(Val::Px(300.0))
+                    .with_height(Val::Px(300.0))
+                    .panel()
+                    .center(),
+                BackgroundColor(Color::srgb(0.6, 0.3, 0.6)),
+            )).with_children(|root| {
+                    root.spawn((
+                        UIContainer::new().with_width(Val::Percent(100.0)).with_height(Val::Px(60.0)),
+                    )).with_child(UIButton::new().full());
+                    root.spawn((
+                        UIContainer::new().with_width(Val::Percent(100.0)).with_height(Val::Px(60.0)),
+                    )).with_child(UIButton::new().full());
+                    root.spawn(UIContainerClose);
+                    root.spawn(UIContainerTitle::from_text("Paused...".into()));
+                });
         });
-    });
 }
 
 fn destroy_ui(mut commands: Commands, root: Single<Entity, With<UIRoot>>) {
