@@ -1,11 +1,13 @@
 pub mod components;
 pub mod views;
+pub mod cursors;
 
 use bevy::prelude::*;
 use crate::game::GameState;
 use crate::game::input::{InputStore, RawFrameKeys};
 use crate::game::input::actions::InputAction;
 use crate::game::ui::components::UIComponentsPlugin;
+use crate::game::ui::cursors::{CursorType, UICursorsPlugin};
 use crate::game::ui::views::UIViewsPlugin;
 
 #[derive(States, Debug, Clone, Default, PartialEq, Eq, Hash)]
@@ -21,7 +23,7 @@ pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((UIViewsPlugin, UIComponentsPlugin));
+        app.add_plugins((UIViewsPlugin, UIComponentsPlugin, UICursorsPlugin));
         app.init_state::<UIState>();
         app.add_systems(OnEnter(GameState::Setup), setup);
         app.add_systems(
@@ -58,9 +60,11 @@ fn update_paused(
     frame_keys: Res<RawFrameKeys>,
     mut next_game_state: ResMut<NextState<GameState>>,
     mut next_ui_state: ResMut<NextState<UIState>>,
+    mut cursor_type: ResMut<CursorType>,
 ) {
     if input_store.get_scalar(InputAction::Resume).unwrap().pressed(&frame_keys) {
         next_game_state.set(GameState::Running);
         next_ui_state.set(UIState::Blank);
+        *cursor_type = CursorType::Interact;
     }
 }

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::game::assets::sprites::ui::UIAssets;
+use crate::game::{assets::sprites::ui::UIAssets, ui::cursors::CursorType};
 
 #[derive(Component, Default, Clone, Copy, PartialEq)]
 pub enum UIButtonState {
@@ -103,6 +103,7 @@ fn register_ui(
 fn update_state(
     mut button_elements: Populated<(&Interaction, &mut UIButtonState, &mut UIButton, &mut ImageNode), (Changed<Interaction>, With<UIButton>)>,
     ui_assets: Option<Res<UIAssets>>,
+    mut cursor_type: ResMut<CursorType>,
 ) {
     let Some(ui_assets) = ui_assets else {
         return;
@@ -118,14 +119,17 @@ fn update_state(
                 Interaction::Pressed => {
                     *new_state = UIButtonState::Hovered;
                     image_node.image = ui_assets.secondary_slice_pressed.clone();
+                    *cursor_type = CursorType::Interact;
                 },
                 Interaction::Hovered => {
                     *new_state = UIButtonState::Hovered;
                     image_node.image = ui_assets.secondary_slice.clone();
+                    *cursor_type = CursorType::Interact;
                 },
                 Interaction::None => {
                     *new_state = UIButtonState::None;
                     image_node.image = ui_assets.secondary_slice.clone();
+                    *cursor_type = CursorType::Point;
                 },
             };
         }

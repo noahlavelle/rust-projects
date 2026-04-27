@@ -10,4 +10,9 @@ pub struct UIAssets {
     #[asset(path = "embedded://sprites/ui/brown_pressed.png")]
     pub secondary_slice_pressed: Handle<Image>,
 
+    #[asset(path = "embedded://sprites/ui/cursors.png")]
+    pub cursors: Handle<Image>,
+    #[asset(texture_atlas_layout(tile_size_x = 32, tile_size_y = 32, rows = 2, columns = 4))]
+    pub cursors_layout: Handle<TextureAtlasLayout>,
+
 }
