@@ -1,11 +1,21 @@
 use bevy::prelude::*;
 
+use crate::game::assets::fonts::FontAssets;
+
+#[derive(Default)]
+pub enum FontStyle {
+    #[default]
+    Regular,
+    Italic,
+}
+
 #[derive(Component)]
 #[require(Node)]
 pub struct UIText {
     content: String,
     color: Color,
     size: f32,
+    font_style: FontStyle,
 }
 
 impl UIText {
@@ -14,6 +24,7 @@ impl UIText {
             content: String::default(),
             color: Color::BLACK,
             size: 12.0,
+            font_style: FontStyle::default(),
         }
     }
 
@@ -29,6 +40,10 @@ impl UIText {
         self.size = size;
         self
     }
+    pub fn with_style(mut self, style: FontStyle) -> Self {
+        self.font_style = style;
+        self
+    }
 }
 
 pub struct UITextPlugin;
@@ -42,12 +57,23 @@ impl Plugin for UITextPlugin {
 fn register_ui(
     mut commands: Commands,
     text_elements: Populated<(Entity, &UIText), Added<UIText>>,
+    font_assets: Option<Res<FontAssets>>,
 ) {
+    let Some(font_assets) = font_assets else {
+        return;
+    };
+
     for (entity, text) in text_elements.iter() {
+        let font = match text.font_style {
+            FontStyle::Regular => font_assets.primary_font.clone(),
+            FontStyle::Italic => font_assets.italic_font.clone(),
+        };
+
         commands.entity(entity).insert((
             Text(text.content.clone()),
             TextColor(text.color),
             TextFont {
+                font,
                 font_size: text.size,
                 ..default()
             }

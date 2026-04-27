@@ -2,14 +2,21 @@ pub mod title;
 pub mod close;
 
 use bevy::prelude::*;
+use crate::game::assets::sprites::ui::UIAssets;
 use crate::game::ui::components::container::close::{UIContainerClosePlugin};
 use crate::game::ui::components::container::title::UIContainerTitlePlugin;
 
 const PANEL_PADDING: Val = Val::Px(24.0);
-const TITLE_FONT_SIZE: f32 = 12.0;
 
-#[derive(Component)]
-#[require(Node)]
+#[derive(Component, Default, PartialEq)]
+pub enum UIContainerDisplay {
+    #[default]
+    None,
+    Panel,
+}
+
+#[derive(Component, Clone, Copy)]
+#[require(Node, UIContainerDisplay)]
 pub struct UIContainer {
     position_type: PositionType,
     position: UiRect,
@@ -74,22 +81,6 @@ impl UIContainer {
         self.with_width(Val::Percent(100.0))
             .with_height(Val::Percent(100.0))
     }
-    pub fn left(mut self, val: Val) -> Self {
-        self.position.left = val;
-        self
-    }
-    pub fn right(mut self, val: Val) -> Self {
-        self.position.right = val;
-        self
-    }
-    pub fn top(mut self, val: Val) -> Self {
-        self.position.top = val;
-        self
-    }
-    pub fn bottom(mut self, val: Val) -> Self {
-        self.position.bottom = val;
-        self
-    }
 }
 
 pub struct UIContainerPlugin;
@@ -103,9 +94,28 @@ impl Plugin for UIContainerPlugin {
 
 fn register_ui(
     mut commands: Commands,
-    container_elements: Populated<(Entity, &UIContainer), Added<UIContainer>>,
+    container_elements: Populated<(Entity, &UIContainer, &UIContainerDisplay), Added<UIContainer>>,
+    ui_assets: Option<Res<UIAssets>>,
 ) {
-    for (entity, container) in container_elements.iter() {
+    let Some(ui_assets) = ui_assets else {
+        return;
+    };
+
+    for (entity, container, display) in container_elements.iter() {
+        if *display == UIContainerDisplay::Panel {
+            container.with_padding(UiRect::all(PANEL_PADDING));
+            commands.entity(entity).insert(ImageNode {
+                image: ui_assets.primary_slice.clone(),
+                image_mode: NodeImageMode::Sliced(TextureSlicer {
+                    border: BorderRect::all(8.0),
+                    center_scale_mode: SliceScaleMode::Stretch,
+                    max_corner_scale: 4.0,
+                    ..default()
+                }),
+                ..default()
+            });
+        }
+
         commands.entity(entity).insert(Node {
                 display: Display::Flex,
                 position_type: container.position_type,

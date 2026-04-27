@@ -1,14 +1,16 @@
 pub mod player;
 pub mod input;
 pub mod ui;
+pub mod assets;
 
 use bevy::app::App;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
+use crate::game::assets::AssetsPlugin;
 use crate::game::input::{BaseKeyMap, InputPlugin};
 use crate::game::input::actions::InputAction;
 use crate::game::player::{Player, PlayerPlugin};
-use crate::game::ui::UIPlugin;
+use crate::game::ui::{UIPlugin};
 
 pub struct GamePlugin;
 
@@ -17,6 +19,7 @@ impl Plugin for GamePlugin {
         app.init_state::<GameState>();
 
         app.add_plugins((
+            AssetsPlugin,
             PlayerPlugin,
             InputPlugin,
             UIPlugin,
@@ -33,6 +36,7 @@ impl Plugin for GamePlugin {
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 enum GameState {
     #[default]
+    AssetLoading,
     Setup,
     Starting,
     Running,
@@ -40,7 +44,10 @@ enum GameState {
     Ended,
 }
 
-fn setup(mut commands: Commands, mut next_game_state: ResMut<NextState<GameState>>) {
+fn setup(
+    mut commands: Commands,
+    mut next_game_state: ResMut<NextState<GameState>>,
+) {
     commands.spawn(Camera2d::default());
 
     let mut input_map = BaseKeyMap(HashMap::new());
@@ -74,6 +81,6 @@ fn resume() {
 
 }
 
-fn end() {
-
+fn end(mut exit: MessageWriter<AppExit>) {
+    exit.write(AppExit::Success);
 }

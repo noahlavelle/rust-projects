@@ -1,6 +1,7 @@
 use bevy::prelude::*;
-use crate::game::ui::components::container::{UIContainer, TITLE_FONT_SIZE};
-use crate::game::ui::components::text::UIText;
+use crate::game::ui::components::text::{FontStyle, UIText};
+
+const TITLE_FONT_SIZE: f32 = 16.0;
 
 #[derive(Component)]
 #[require(Node)]
@@ -29,13 +30,14 @@ fn register_ui(
         commands.entity(entity).insert((
             Node {
                 position_type: PositionType::Absolute,
-                top: Val::Px(6.0),
-                left: Val::Px(6.0),
+                top: Val::Px(20.0),
+                left: Val::Px(24.0),
                 ..default()
             },
            UIText::new()
                 .with_content(title.content.clone())
                 .with_size(TITLE_FONT_SIZE)
+                .with_style(FontStyle::Italic),
         ));
     }
 }

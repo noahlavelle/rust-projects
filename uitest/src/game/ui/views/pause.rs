@@ -1,10 +1,14 @@
 use bevy::prelude::*;
 use crate::game::GameState;
-use crate::game::ui::components::button::{UIButton, UIButtonState};
-use crate::game::ui::components::container::{UIContainer};
+use crate::game::ui::components::button::{UIButton, UIButtonState, UIButtonStyle};
+use crate::game::ui::components::container::{UIContainer, UIContainerDisplay};
 use crate::game::ui::components::container::close::UIContainerClose;
 use crate::game::ui::components::container::title::UIContainerTitle;
 use crate::game::ui::UIState;
+use crate::game::ui::components::text::UIText;
+
+const PANEL_WIDTH: f32 = 375.0;
+const PANEL_HEIGHT: f32 = 450.0;
 
 #[derive(Component)]
 struct UIRoot;
@@ -34,19 +38,27 @@ fn load_ui(mut commands: Commands) {
     )).with_children(|root| {
             root.spawn((
                 UIContainer::new()
-                    .with_width(Val::Px(300.0))
-                    .with_height(Val::Px(300.0))
+                    .with_width(Val::Px(PANEL_WIDTH))
+                    .with_height(Val::Px(PANEL_HEIGHT))
                     .panel()
                     .center(),
-                BackgroundColor(Color::srgb(0.6, 0.3, 0.6)),
+                UIContainerDisplay::Panel,
             )).with_children(|root| {
                     root.spawn((
                         UIContainer::new().with_width(Val::Percent(100.0)).with_height(Val::Px(60.0)),
-                    )).with_child((UIButton::new().full(), ButtonAction::A));
+                    )).with_children(|root| {
+                            root.spawn((ButtonAction::A, UIButton::new().full()))
+                                .with_child(UIText::new().with_size(24.0).with_content("Action A".into()));
+                        });
+
                     root.spawn((
                         UIContainer::new().with_width(Val::Percent(100.0)).with_height(Val::Px(60.0)),
-                    )).with_child((UIButton::new().full(), ButtonAction::B));
-                    root.spawn(UIContainerClose).with_child((UIButton::new().full(), ButtonAction::Close));
+                    )).with_children(|root| {
+                            root.spawn((ButtonAction::B, UIButton::new().full()))
+                                .with_child(UIText::new().with_size(24.0).with_content("Quit".into()));
+                        });
+
+                    root.spawn(UIContainerClose).with_child((UIButton::new().with_style(UIButtonStyle::None).full(), ButtonAction::Close));
                     root.spawn(UIContainerTitle::from_text("Paused...".into()));
                 });
         });
@@ -70,10 +82,10 @@ fn handle_interaction(
         match *action {
             ButtonAction::Close => {
                 next_game_state.set(GameState::Running);
-                next_ui_state.set(UIState::None);
+                next_ui_state.set(UIState::Blank);
             },
             ButtonAction::A => println!("A Clicked"),
-            ButtonAction::B => println!("B Clicked"),
+            ButtonAction::B => next_game_state.set(GameState::Ended),
         }
     }
 }

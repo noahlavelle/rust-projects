@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use crate::game::ui::components::container::{UIContainer};
 use crate::game::ui::components::text::UIText;
 
 #[derive(Component)]
@@ -24,13 +23,13 @@ fn register_ui(
                 width: Val::Px(16.0),
                 height: Val::Px(16.0),
                 position_type: PositionType::Absolute,
-                top: Val::Px(6.0),
-                right: Val::Px(6.0),
+                top: Val::Px(20.0),
+                right: Val::Px(24.0),
                 ..default()
             },
            UIText::new()
                 .with_content("x".into())
-                .with_size(16.0),
+                .with_size(18.0),
         ));
     }
 }

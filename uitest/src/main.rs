@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
     window::{WindowResolution, PresentMode}
 };
-use bevy::app::ScheduleRunnerPlugin;
+use bevy_embedded_assets::EmbeddedAssetPlugin;
 use consts::*;
 use crate::game::GamePlugin;
 
@@ -29,7 +29,8 @@ fn main() {
                     }),
                     ..default()
                 })
-                .set(ImagePlugin::default()),
+                .set(ImagePlugin::default_nearest()),
+            EmbeddedAssetPlugin::default(),
             GamePlugin
         ))
         .run();

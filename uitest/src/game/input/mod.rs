@@ -51,8 +51,10 @@ pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Starting), build_store);
-        app.add_systems(PreUpdate, collect_frame_inputs);
-        // app.add_systems(PostUpdate, clear_frame_inputs);
+        app.add_systems(
+            PreUpdate,
+            collect_frame_inputs.run_if(in_state(GameState::Running).or(in_state(GameState::Paused)))
+        );
         app.init_resource::<InputStore>();
         app.init_resource::<RawFrameKeys>();
     }
