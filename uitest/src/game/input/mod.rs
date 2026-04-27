@@ -51,7 +51,8 @@ pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Starting), build_store);
-        app.add_systems(Update, collect_frame_inputs);
+        app.add_systems(PreUpdate, collect_frame_inputs);
+        // app.add_systems(PostUpdate, clear_frame_inputs);
         app.init_resource::<InputStore>();
         app.init_resource::<RawFrameKeys>();
     }
@@ -70,3 +71,4 @@ fn build_store(map: Res<BaseKeyMap>, mut input_store: ResMut<InputStore>) {
 fn collect_frame_inputs(keys: Res<ButtonInput<KeyCode>>, mut store: ResMut<RawFrameKeys>) {
     store.0 = keys.get_just_pressed().copied().collect();
 }
+

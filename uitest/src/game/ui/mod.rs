@@ -38,7 +38,7 @@ fn update_none(
     mut next_game_state: ResMut<NextState<GameState>>,
     mut next_ui_state: ResMut<NextState<UIState>>,
 ) {
-    if input_store.get_scalar(InputAction::Pause).unwrap().pressed(&*frame_keys) {
+    if input_store.get_scalar(InputAction::Pause).unwrap().pressed(&frame_keys) {
         next_game_state.set(GameState::Paused);
         next_ui_state.set(UIState::Paused);
     }
@@ -50,7 +50,7 @@ fn update_paused(
     mut next_game_state: ResMut<NextState<GameState>>,
     mut next_ui_state: ResMut<NextState<UIState>>,
 ) {
-    if input_store.get_scalar(InputAction::Resume).unwrap().pressed(&*frame_keys) {
+    if input_store.get_scalar(InputAction::Resume).unwrap().pressed(&frame_keys) {
         next_game_state.set(GameState::Running);
         next_ui_state.set(UIState::None);
     }
